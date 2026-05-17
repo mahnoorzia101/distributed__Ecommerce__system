@@ -203,69 +203,72 @@ Confirm Payment
 </div>
 
 <script>
+// 1. Capture the dynamic Gateway URL injected by your Flask backend
+const gatewayUrl = "{{ gateway_url }}";
 
-const path=
-window.location.pathname
+const path = window.location.pathname;
+const orderId = path.split("/").pop();
+const amount = localStorage.getItem("amount") || "0";
 
-const orderId=
-path.split("/").pop()
-
-const amount=
-localStorage.getItem("amount")
-
-document.getElementById(
-"info"
-).innerHTML=`
-
-Order #${orderId}
-<br><br>
-
-Amount:
-Rs ${amount}
-
-`
+document.getElementById("info").innerHTML = `
+    Order #${orderId}
+    <br><br>
+    Amount: Rs ${amount}
+`;
 
 function pay(){
+    // Grab the button component for visual load state handling
+    const payBtn = document.querySelector("button");
+    if (payBtn) {
+        payBtn.disabled = true;
+        payBtn.innerText = "Verifying Transaction...";
+    }
 
-fetch(
+    // 2. Dynamically route the transaction payload straight to your live cloud cluster
+    fetch(`${gatewayUrl}/api/pay`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            order_id: Number(orderId), // Enforces integer casting for strict DB queries
+            amount: Number(amount)
+        })
+    })
+    .then(r => {
+        if (!r.ok) {
+            throw new Error(`HTTP error! status: ${r.status}`);
+        }
+        return r.json();
+    })
+    .then(data => {
+        // 3. Case-insensitive normalization check to avoid data-type mismatches
+        const paymentStatus = (data.status || "").toLowerCase();
 
-"http://localhost:5000/api/pay",
-
-{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-
-order_id:orderId,
-
-amount:amount
-
-})
-
-})
-
-.then(r=>r.json())
-
-.then(data=>{
-
-if(
-data.status=="SUCCESS"
-){
-
-window.location.href=
-"/success"
-
+        if (paymentStatus === "success" || data.message?.toLowerCase().includes("success")) {
+            // Clean up transaction cache tokens cleanly before redirecting
+            localStorage.removeItem("amount");
+            localStorage.removeItem("order_id");
+            localStorage.removeItem("cart");
+            
+            window.location.href = "/success";
+        } else {
+            alert(data.error || data.message || "Payment declined by vendor bank service.");
+            if (payBtn) {
+                payBtn.disabled = false;
+                payBtn.innerText = "Confirm Payment";
+            }
+        }
+    })
+    .catch((err) => {
+        console.error("Payment clearing execution error:", err);
+        alert("Payment processing failed. Connection to payment validation cluster timed out.");
+        if (payBtn) {
+            payBtn.disabled = false;
+            payBtn.innerText = "Confirm Payment";
+        }
+    });
 }
-
-})
-
-}
-
 </script>
 
 </body>
