@@ -189,91 +189,89 @@ Proceed To Payment
 
 
 <script>
+// 1. Capture the dynamic Gateway URL injected by your Flask backend
+const gatewayUrl = "{{ gateway_url }}";
 
-const cart=
-JSON.parse(
-localStorage.getItem("cart")
-)||[]
+const cart = JSON.parse(localStorage.getItem("cart")) || [];
+let total = 0;
 
+cart.forEach(item => {
+    total += Number(item.price);
+});
 
-let total=0;
+document.getElementById("price").innerHTML = cart.length + " item(s)";
+document.getElementById("total").innerText = total;
 
-cart.forEach(item=>{
+function proceed() {
+    if (cart.length === 0) {
+        alert("Your cart is empty!");
+        return;
+    }
 
-total += Number(item.price)
+    // 2. Fetch the actual logged-in user from session storage
+    const sessionUser = JSON.parse(sessionStorage.getItem("user"));
+    
+    // Fallback block if someone tests checkout without signing in first
+    if (!sessionUser || (!sessionUser.id && !sessionUser.user_id)) {
+        alert("Please log in to complete your checkout purchase.");
+        window.location.href = "/login";
+        return;
+    }
 
-})
+    // Extract user ID safely handling both common API response shapes (id or user_id)
+    const activeUserId = sessionUser.id || sessionUser.user_id;
 
-document.getElementById(
-"price"
-).innerHTML=
-cart.length+
-" item(s)"
+    // Grab button for loading visual state management
+    const proceedBtn = document.getElementById("checkoutBtn");
+    if (proceedBtn) {
+        proceedBtn.disabled = true;
+        proceedBtn.innerText = "Processing Order...";
+    }
 
-document.getElementById(
-"total"
-).innerText=total
+    // 3. Dynamically point the checkout execution payload to your cloud Gateway
+    fetch(`${gatewayUrl}/api/checkout`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            user_id: activeUserId,
+            // Maps your current cart data structure neatly down to your backend model schema
+            product_id: cart[0].id 
+        })
+    })
+    .then(r => {
+        if (!r.ok) {
+            throw new Error(`HTTP error! status: ${r.status}`);
+        }
+        return r.json();
+    })
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+            if (proceedBtn) {
+                proceedBtn.disabled = false;
+                proceedBtn.innerText = "Checkout";
+            }
+            return;
+        }
 
+        // Cache the transaction variables securely before executing checkout handoff
+        localStorage.setItem("order_id", data.order_id);
+        localStorage.setItem("amount", total);
 
-function proceed(){
-
-fetch(
-"http://localhost:5000/api/checkout",
-{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-
-user_id:1,
-
-product_id:cart[0].id
-
-})
-
-})
-
-.then(r=>r.json())
-
-.then(data=>{
-
-if(data.error){
-
-alert(data.error)
-
-return
+        // Advance client to payment routing window
+        window.location.href = "/payment/" + data.order_id;
+    })
+    .catch((err) => {
+        console.error("Checkout transaction failure:", err);
+        alert("Checkout failed. Connection to order orchestration mesh refused.");
+        if (proceedBtn) {
+            proceedBtn.disabled = false;
+            proceedBtn.innerText = "Checkout";
+        }
+    });
 }
-
-localStorage.setItem(
-"order_id",
-data.order_id
-)
-
-localStorage.setItem(
-"amount",
-total
-)
-
-window.location.href=
-"/payment/"+
-data.order_id
-
-})
-
-.catch(()=>{
-
-alert(
-"Checkout failed"
-)
-
-})
-
-}
-
 </script>
 
 </body>
