@@ -1,7 +1,13 @@
 from flask import Flask, render_template
+import os
 
-app = Flask(__name__, template_folder="templates")
-
+# Dynamically point Flask to the correct subfolders inside your monorepo
+base_dir = os.path.dirname(__file__)
+app = Flask(
+    __name__, 
+    template_folder=os.path.join(base_dir, "templates"),
+    static_folder=os.path.join(base_dir, "static")
+)
 @app.route("/")
 def home():
     return render_template("index.html")
