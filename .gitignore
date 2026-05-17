@@ -1,0 +1,18 @@
+# Ignore local environment variables (Crucial for database security)
+.env
+*.env
+
+# Ignore Python virtual environments
+venv/
+ENV/
+env/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore IDE specific folders
+.vscode/
+.idea/
