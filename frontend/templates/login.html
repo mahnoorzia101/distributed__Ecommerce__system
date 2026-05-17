@@ -157,50 +157,60 @@ button:hover{
 
 </div>
 <script>
+// 1. Capture the dynamic Gateway URL injected by your Flask backend
+const gatewayUrl = "{{ gateway_url }}";
+
 document.getElementById("loginForm").addEventListener("submit", async function(e){
     e.preventDefault();
 
-    const res = await fetch("http://localhost:5000/api/user/login", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            email: email.value,
-            password: password.value
-        })
-    });
-
-    const data = await res.json();
-
-    if(res.ok){
-        sessionStorage.setItem("user", JSON.stringify(data.user));
-        window.location.href = "/";
-    } else {
-        alert(data.message);
+    // Grab the submit button to provide visual loading feedback
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalBtnText = submitBtn ? submitBtn.innerText : "Login";
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = "Signing in...";
     }
-});
-</script>
-<script>
-document.getElementById("loginForm").addEventListener("submit", async function(e){
-    e.preventDefault();
 
-    const res = await fetch("http://localhost:5000/api/user/login", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            email: document.getElementById("email").value,
-            password: document.getElementById("password").value
-        })
-    });
+    try {
+        // 2. Point the request directly to your live production API Gateway cluster
+        const res = await fetch(`${gatewayUrl}/api/user/login`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: document.getElementById("email").value,
+                password: document.getElementById("password").value
+            })
+        });
 
-    const data = await res.json();
+        const data = await res.json();
 
-    if(res.ok){
-        alert("Login successful!");
-        console.log(data);
-    } else {
-        alert(data.message || "Login failed");
+        if(res.ok){
+            alert("Login successful!");
+            
+            // 3. Store user data in session storage so auth.js can update your UI state
+            if (data.user) {
+                sessionStorage.setItem("user", JSON.stringify(data.user));
+            } else if (data.token || data.id) {
+                // Fallback catch-all case depending on your microservice response shape
+                sessionStorage.setItem("user", JSON.stringify(data));
+            }
+
+            // Redirect back to the main homepage storefront node
+            window.location.href = "/";
+        } else {
+            alert(data.message || data.error || "Login failed. Check your credentials.");
+        }
+    } catch (err) {
+        console.error("Login network exception:", err);
+        alert("Unable to reach the authentication cluster. Verify your gateway service routing is active.");
+    } finally {
+        // Restore button state if logging in fails
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalBtnText;
+        }
     }
 });
 </script>
